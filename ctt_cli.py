@@ -33,8 +33,6 @@ def read_config(config_path: str):
                 if not found:
                     error_msg = f'''Mandatory field {field} is not set in configuration file.'''
                     raise ValueError(error_msg)
-            global cli_configuration
-            cli_configuration.host = ctt_conf['host']
             if verbose:
                 print(f'Successfully read configuration file:')
                 pprint(config_yaml)
