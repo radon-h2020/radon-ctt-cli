@@ -2,6 +2,12 @@
 
 Command-line interface (CLI) for interacting with the Radon CTT server.
 
+## Installation
+
+* Clone repository
+* (Optional) Install Python environment (e.g., `virtualenv .` and `source bin/activate`)
+* Install package requirements: `pip install -r requirements.txt`
+
 
 ## Usage
 ```
