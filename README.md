@@ -2,6 +2,13 @@
 
 Command-line interface (CLI) for interacting with the Radon CTT server.
 
+| Items | Contents |
+| --- | --- |
+| **Description** | The Continuous Testing Tool Command-line interface allows to execute CTT workflows on a [CTT Server](https://github.com/radon-h2020/radon-ctt) based on the information from configuration files. |
+| **Licence**| Apache License, Version 2.0: https://opensource.org/licenses/Apache-2.0 |
+| **Maintainers**| <ul><li>Thomas F. Düllmann ([@duelle](https://github.com/duelle)) </li><li>Andre van Hoorn ([@avanhoorn](https://github.com/avanhoorn)) </li></ul> |
+
+
 ## Installation
 
 * Clone repository
