@@ -24,7 +24,7 @@ ctt-cli.py [PARAMS]
         -c, --config=CTT_CONFIG     Path to the CTT configuration file
         
     Other parameters:   
-        -r, --remote                Run (multiple configurations remotely)
+        -r, --remote                Run (multiple) configurations remotely
         -v, --verbose               Be verbose
         -h, --help                  Print this help
 ```
