@@ -16,7 +16,8 @@ ctt-cli.py [PARAMS]
         -u, --url=CTT_SERVER_URL    URL of the running CTT server (e.g., http://localhost:18080/RadonCTT)
         -c, --config=CTT_CONFIG     Path to the CTT configuration file
         
-    Other parameters:    
+    Other parameters:   
+        -r, --remote                Run (multiple configurations remotely)
         -v, --verbose               Be verbose
         -h, --help                  Print this help
 ```
