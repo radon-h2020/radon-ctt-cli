@@ -1,41 +1,70 @@
 from __future__ import print_function
+
 import getopt
 import json
+import os
+import requests
+
 import swagger_client
 import sys
+import yaml
 
 from swagger_client.rest import ApiException
 from pprint import pprint
 from swagger_client.configuration import Configuration
 
 cli_configuration = Configuration()
-ctt_conf = {}
 verbose: bool = False
 MANDATORY_FIELDS = ['name', 'repository_url', 'sut_tosca_path', 'ti_tosca_path',
                     'result_destination_path', 'test_id']
 api_client = swagger_client.ApiClient(cli_configuration)
 
 
+def config_is_multi(config_yaml) -> bool:
+    if 'test_id' in config_yaml:
+        return False
+    else:
+        return True
+
+
+def config_is_valid(config_yaml) -> bool:
+    for field in MANDATORY_FIELDS:
+        found: bool = False
+        for entry in config_yaml:
+            if field == entry:
+                found = True
+                break
+        if not found:
+            error_msg = f'''Mandatory field {field} is not set in configuration file.'''
+            raise ValueError(error_msg)
+    return True
+
+
 def read_config(config_path: str):
-    import os
-    import yaml
+    ctt_conf = {}
     if os.path.isfile(config_path):
         with open(config_path, 'r') as config_file:
             config_yaml = yaml.safe_load(config_file)
-            global ctt_conf
-            ctt_conf = config_yaml
-            for field in MANDATORY_FIELDS:
-                found: bool = False
-                for entry in ctt_conf:
-                    if field == entry:
-                        found = True
-                        break
-                if not found:
-                    error_msg = f'''Mandatory field {field} is not set in configuration file.'''
-                    raise ValueError(error_msg)
+            if config_is_multi(config_yaml):
+                for entity in config_yaml:
+                    if config_is_valid(entity):
+                        ctt_conf[entity['test_id']] = entity
+            elif config_is_valid(config_yaml):
+                ctt_conf[config_yaml['test_id']] = config_yaml
+
+            # for field in MANDATORY_FIELDS:
+            #     found: bool = False
+            #     for entry in ctt_conf:
+            #         if field == entry:
+            #             found = True
+            #             break
+            #     if not found:
+            #         error_msg = f'''Mandatory field {field} is not set in configuration file.'''
+            #         raise ValueError(error_msg)
             if verbose:
                 print(f'Successfully read configuration file:')
                 pprint(config_yaml)
+    return ctt_conf
 
 
 def create_project(config: Configuration, project_name: str, repository_url: str) -> str:
@@ -131,23 +160,36 @@ def download_result(conf: Configuration, result_uuid: str, result_destination_pa
         print(f'''Downloaded results to: {result_destination_path}''')
 
 
-def main(argv):
+def trigger_workflow(conf: Configuration, config_file):
+    url = f'''{conf.host}/workflow'''
+    data = {'workflow_data': open(config_file, 'rb').read()}
+    headers = {'Content-Type': 'application/octet-stream', 'accept': '*/*'}
+    response = requests.post(url=url, data=data, headers=headers)
+    json_data = response.json()
+    if 'logs' in json_data and 'results' in json_data:
+        return json_data['logs'], json_data['results']
+    else:
+        return None
 
+
+def main(argv):
     usage: str = '''ctt-cli.py [PARAMS]
     Mandatory parameters:
         -u, --url=CTT_SERVER_URL    URL of the CTT server (e.g., http://localhost:18080/RadonCTT)
         -c, --config=CTT_CONFIG     Path to the CTT configuration file
         
     Other parameters:    
+        -r, --remote                Run (multiple) configurations remotely
         -v, --verbose               Be verbose
         -h, --help                  Print this help
     '''
 
     global cli_configuration
     global verbose
+    remote: bool = False
     config_file = ''
     try:
-        opts, args = getopt.getopt(argv, 'u:c:vh', ['url=', 'config=', 'verbose', 'help'])
+        opts, args = getopt.getopt(argv, 'u:c:vhr', ['url=', 'config=', 'verbose', 'help', 'remote'])
         for option, argument in opts:
             if option in ('-u', '--url'):
                 cli_configuration.host = argument
@@ -155,23 +197,43 @@ def main(argv):
                 config_file = argument
             elif option in ('-v', '--verbose'):
                 verbose = True
+            elif option in ('-r', '--remote'):
+                remote = True
             elif option in ('-h', '--help'):
                 print(usage)
                 sys.exit()
             else:
                 raise SystemExit(usage)
+        if not cli_configuration.host or not config_file:
+            raise SystemExit(usage)
+
     except ValueError:
         raise SystemExit(usage)
 
-    read_config(config_file)
-    project_uuid = create_project(cli_configuration, ctt_conf['name'], ctt_conf['repository_url'])
-    test_artifact_uuid = create_test_artifact(cli_configuration, project_uuid,
-                                              ctt_conf['sut_tosca_path'], ctt_conf['ti_tosca_path'],
-                                              ctt_conf.get('sut_inputs_path'), ctt_conf.get('ti_inputs_path'))
-    deployment_uuid = create_deployment(cli_configuration, test_artifact_uuid)
-    execution_uuid = create_execution(cli_configuration, deployment_uuid)
-    result_uuid = create_result(cli_configuration, execution_uuid)
-    download_result(cli_configuration, result_uuid, ctt_conf.get('result_destination_path'))
+    ctt_conf = read_config(config_file)
+
+    if remote:
+        logs, results = trigger_workflow(cli_configuration, config_file)
+        for key in ctt_conf.keys():
+            results_uuid = results[key]
+            results_destination = ctt_conf[key]['result_destination_path']
+            cur_logs = logs[key]
+            print(f'''{key}: {results_uuid} -> {results_destination} {cur_logs}''')
+            download_result(cli_configuration, results_uuid, results_destination)
+    else:
+        # read_config(config_file)
+        for entry in ctt_conf:
+            config_entry = ctt_conf[entry]
+            project_uuid = create_project(cli_configuration, config_entry['name'], config_entry['repository_url'])
+            test_artifact_uuid = create_test_artifact(cli_configuration, project_uuid,
+                                                      config_entry['sut_tosca_path'],
+                                                      config_entry['ti_tosca_path'],
+                                                      config_entry.get('sut_inputs_path'),
+                                                      config_entry.get('ti_inputs_path'))
+            deployment_uuid = create_deployment(cli_configuration, test_artifact_uuid)
+            execution_uuid = create_execution(cli_configuration, deployment_uuid)
+            result_uuid = create_result(cli_configuration, execution_uuid)
+            download_result(cli_configuration, result_uuid, config_entry.get('result_destination_path'))
 
 
 if __name__ == "__main__":
